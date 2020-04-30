@@ -60,6 +60,7 @@ class host:
         """
         intersect_dict = []
         for node in intersect_ids:
+            # print(node)
             for item in label_dict:
                 item_node = int(item['node'])
                 if int(node) == item_node:
