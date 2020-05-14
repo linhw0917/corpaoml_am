@@ -31,7 +31,7 @@ class coordinator:
                 guest_item_label_weight = guest_item['label_weight']
                 # print("guest_item_node======", guest_item_label_weight)
                 if host_item_node == guest_item_node:
-                    # print("host_item_node=====",host_item_node)
+                    # print("host_item_node=====",host_item_label_weight)
                     host_item_label_weight = [guest_item_label_weight[i] + host_item_label_weight[i] for i in
                                                    range(0, self.num)]  # 同类标签数量相加
                     # item_intersect_dict = {'node': host_item_node, 'label_weight': intersect_item_label_weight}

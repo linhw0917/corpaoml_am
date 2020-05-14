@@ -51,11 +51,11 @@ class driver:
         node10_list = G10.nodes()
         map=[node1_list,node2_list,node3_list,node4_list,node5_list,node6_list,node7_list,node8_list,node9_list,node10_list]
         intersect = Intersect()
-        intersect_ids=intersect.run(G9,G10)
+        intersect_ids=intersect.run(node9_list,node10_list)
         for i in range(0,8):
             for j in range(i+1,10):
                 intersect_ids0=intersect.run(map[i],map[j])
-                # print("intersect_ids0=",intersect_ids0)
+                # print("intersect_ids0=",intersect_ids0)1
                 intersect_ids=list(set(intersect_ids0)|set(intersect_ids))#初步的全图交点集
                 # print("intersect_ids=", intersect_ids)
         intersection = [[0] for x in range(0, 10)]
@@ -77,7 +77,6 @@ class driver:
         """
         begin_time = time.time()
         intersect_ids = self.get_intersect_ids(G1, G2,G3, G4,G5, G6,G7, G8,G9, G10)  # 交集顶点
-        # print(intersect_ids[1])
         end_time = time.time()
         # print(intersect_ids)
         id_match_time = (end_time - begin_time)  # 获取交集顶点时间
@@ -155,14 +154,15 @@ class driver:
             intersect_dict =[_host_intersect_dict,_guest_intersect_dict1,_guest_intersect_dict2,_guest_intersect_dict3\
                               ,_guest_intersect_dict4,_guest_intersect_dict5,_guest_intersect_dict6,_guest_intersect_dict7\
                               ,_guest_intersect_dict8,_guest_intersect_dict9]
+
             for i in range(0,10):
                 for j in range(0,10):
                     if i!=j:
                         intersect_dict[i]=_coordinator.send_intersect_dict(intersect_dict[i],intersect_dict[j])
-                if i==0:
-                    intersect_dict[i]=list(_host.get_intersect_dict(intersect_dict[i], intersect_ids[0]))
-                else:
-                    intersect_dict[i] = list(_guest.get_intersect_dict(intersect_dict[i], intersect_ids[i]))
+                # if i==0:
+                #     intersect_dict[i]=list(_host.get_intersect_dict(intersect_dict[i], intersect_ids[0]))
+                # else:
+                #     intersect_dict[i] = list(_guest.get_intersect_dict(intersect_dict[i], intersect_ids[i]))
                 # print("intersect_dict[i]=", intersect_dict[i])
             # host,guest各自更新标签
 
