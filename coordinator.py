@@ -32,7 +32,7 @@ class coordinator:
                 # print("guest_item_node======", guest_item_label_weight)
                 if host_item_node == guest_item_node:
                     # print("host_item_node=====",host_item_label_weight)
-                    host_item_label_weight = [guest_item_label_weight[i] + host_item_label_weight[i] for i in
+                    host_item['label_weight'] = [guest_item_label_weight[i] + host_item_label_weight[i] for i in
                                                    range(0, self.num)]  # 同类标签数量相加
                     # item_intersect_dict = {'node': host_item_node, 'label_weight': intersect_item_label_weight}
                     # intersect_dict.append(item_intersect_dict)
@@ -44,79 +44,50 @@ class coordinator:
         return intersect_host_dict
 
     @staticmethod
-    def get_communities(G1, G2 , G3, G4 , G5, G6 , G7, G8 , G9, G10):
-        """
-        合并社区
-        :param G1:
-        :param G2:
-        :return:
-        """
+    def get_communities(t):
         ids = []
+        # list2 = []
         communities = collections.defaultdict(lambda: list())
-        for node in G1.nodes(True):
-            label_dict = node[1]["label"]
-            for item in label_dict:
-                community = item['community']
-                weight = item['weight']
-                communities[community].append(node[0])
-        for node in G2.nodes(True):
-            label_dict = node[1]["label"]
-            for item in label_dict:
-                community = item['community']
-                weight = item['weight']
-                communities[community].append(node[0])
-        for node in G3.nodes(True):
-            label_dict = node[1]["label"]
-            for item in label_dict:
-                community = item['community']
-                weight = item['weight']
-                communities[community].append(node[0])
-        for node in G4.nodes(True):
-            label_dict = node[1]["label"]
-            for item in label_dict:
-                community = item['community']
-                weight = item['weight']
-                communities[community].append(node[0])
-        for node in G5.nodes(True):
-            label_dict = node[1]["label"]
-            for item in label_dict:
-                community = item['community']
-                weight = item['weight']
-                communities[community].append(node[0])
-        for node in G6.nodes(True):
-            label_dict = node[1]["label"]
-            for item in label_dict:
-                community = item['community']
-                weight = item['weight']
-                communities[community].append(node[0])
-        for node in G7.nodes(True):
-            label_dict = node[1]["label"]
-            for item in label_dict:
-                community = item['community']
-                weight = item['weight']
-                communities[community].append(node[0])
-        for node in G8.nodes(True):
-            label_dict = node[1]["label"]
-            for item in label_dict:
-                community = item['community']
-                weight = item['weight']
-                communities[community].append(node[0])
-        for node in G9.nodes(True):
-            label_dict = node[1]["label"]
-            for item in label_dict:
-                community = item['community']
-                weight = item['weight']
-                communities[community].append(node[0])
-        for node in G10.nodes(True):
-            label_dict = node[1]["label"]
-            for item in label_dict:
-                community = item['community']
-                weight = item['weight']
-                communities[community].append(node[0])
-        # print('communities', communities)
+        for G in t:
+        #     for node in G.nodes(True):
+        #         label_dict = node[1]["label"]
+        #         for item in label_dict:
+        #             community = item['community']
+        #             weight = item['weight']
+        #             communities[community].append(node[0])
+        # list1 = list(communities.values())
+        # for x in range(len(list1)):
+        #     for y in range(len(list1)):
+        #         if (y > x):
+        #             if (set(list1[x]).issubset(list1[y])):
+        #                 list2.append(list1[x])
+        #                 break
+        #             elif (set(list1[y]).issubset(list1[x])):
+        #                 list2.append(list1[y])
+        #                 break
+        # for m in list2:
+        #     if (m in list1):
+        #         list1.remove(m)
+        #
+        # for i in list1:
+        #     id = list(set(i))
+        #     ids.append(id)
+        #     end_time = time.time()
+        # print("ids=====",ids)
+        # return ids
+            for node in G.nodes(True):
+                label_dict = node[1]["label"]
+                for item in label_dict:
+                    community = item['community']
+                    weight = item['weight']
+                    communities[community].append(node[0])
+                    print()
         for i in communities.values():
-            id = list(set(i))  # 去重是因为把交集算了一遍
-            ids.append(id)
+            id = list(set(i))
+            if i not in ids:
+                ids.append(id)
+        #        print('communities.values()',communities.values())
+        print('ids:', ids)
         return ids
 
     @staticmethod

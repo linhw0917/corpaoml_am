@@ -9,16 +9,61 @@ import pandas as pd
 from phe import paillier
 
 
+# class host:
+#     def __init__(self, num):
+#         self.num = num  # 原图图顶点数量
+#         self.public_key, self.private_key = paillier.generate_paillier_keypair(n_length=128)  # 同态加密公钥，秘钥
+#
+#     def get_paillier_public_key(self):
+#         return self.public_key
+#
+#     def get_paillier_private_key(self):
+#         return self.private_key
 class host:
     def __init__(self, num):
-        self.num = num  # 原图图顶点数量
-        self.public_key, self.private_key = paillier.generate_paillier_keypair(n_length=128)  # 同态加密公钥，秘钥
+        self.num = num
 
-    def get_paillier_public_key(self):
+    def set_public_key(self, public_key):
+        self.public_key = public_key
+
+    def get_public_key(self):
         return self.public_key
 
-    def get_paillier_private_key(self):
+    def set_private_key(self, private_key):
+        self.private_key = private_key
+
+    def get_private_key(self):
         return self.private_key
+
+    def set_scale(self, scale):
+        self.scale = scale
+
+    def get_scale(self):
+        return self.scale
+
+    def set_encoder(self, encoder):
+        self.encoder = encoder
+
+    def get_encoder(self):
+        return self.encoder
+
+    def set_encryptor(self, encryptor):
+        self.encryptor = encryptor
+
+    def get_encryptor(self):
+        return self.encryptor
+
+    def set_decryptor(self, decryptor):
+        self.decryptor = decryptor
+
+    def get_decryptor(self):
+        return self.decryptor
+
+    def set_evaluator(self, evaluator):
+        self.evaluator = evaluator
+
+    def get_evaluator(self):
+        return self.evaluator
 
     def get_label_dict(self, G):
         """
