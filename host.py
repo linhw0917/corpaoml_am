@@ -1,25 +1,15 @@
-'''
+"""
 @Time    : 2019/12/16 12:48
 @Author  : wmy
-'''
-import copy
+"""
 import random
 import time
-import pandas as pd
 from phe import paillier
+from seal import *
+from collections import Counter
 
 
-# class host:
-#     def __init__(self, num):
-#         self.num = num  # 原图图顶点数量
-#         self.public_key, self.private_key = paillier.generate_paillier_keypair(n_length=128)  # 同态加密公钥，秘钥
-#
-#     def get_paillier_public_key(self):
-#         return self.public_key
-#
-#     def get_paillier_private_key(self):
-#         return self.private_key
-class host:
+class Host:
     def __init__(self, num):
         self.num = num
 
@@ -65,174 +55,255 @@ class host:
     def get_evaluator(self):
         return self.evaluator
 
-    def get_label_dict(self, G):
+    def params_init(self, params):
         """
-       获取标签数字典
+        根据加密方案初始化加密参数
+        :param encrypted_scheme: 加密方案
+        :param params: 加密算法参数
+        """
+
+        poly_modulus_degree = params['poly_modulus_degree']  # ckks poly_modulus_degree
+        power = params['power']  # ckks scale
+        # ckks参数初始化
+        parms = EncryptionParameters(scheme_type.CKKS)
+        poly_modulus_degree = poly_modulus_degree
+        parms.set_poly_modulus_degree(poly_modulus_degree)
+        parms.set_coeff_modulus(CoeffModulus.BFVDefault(poly_modulus_degree))
+        # scale 设置
+        scale = pow(2.0, power)
+        context = SEALContext.Create(parms)
+
+        # 生成秘钥
+        keygen = KeyGenerator(context)
+        public_key = keygen.public_key()
+        secret_key = keygen.secret_key()
+
+        # 初始化加密器，加密运算器，解密器
+        encryptor = Encryptor(context, public_key)
+        evaluator = Evaluator(context)
+        decryptor = Decryptor(context, secret_key)
+
+        # 初始化编码器
+        encoder = CKKSEncoder(context)
+        self.set_scale(scale)
+        self.set_public_key(public_key)
+        self.set_private_key(secret_key)
+        self.set_encoder(encoder)
+        self.set_encryptor(encryptor)
+        self.set_decryptor(decryptor)
+        self.set_evaluator(evaluator)
+        # if encrypted_scheme == 'paillier':  # paillier加密方案
+        #     key_length = params['key_length']  # paillier秘钥长度
+        #     public_key, private_key = paillier.generate_paillier_keypair(n_length=key_length)  # paillier秘钥
+        #     self.set_public_key(public_key)
+        #     self.set_private_key(private_key)
+        # elif encrypted_scheme == 'ckks':  # ckks加密方案
+        #     poly_modulus_degree = params['poly_modulus_degree']  # ckks poly_modulus_degree
+        #     power = params['power']  # ckks scale
+        #     # ckks参数初始化
+        #     parms = EncryptionParameters(scheme_type.CKKS)
+        #     poly_modulus_degree = poly_modulus_degree
+        #     parms.set_poly_modulus_degree(poly_modulus_degree)
+        #     parms.set_coeff_modulus(CoeffModulus.BFVDefault(poly_modulus_degree))
+        #     # scale 设置
+        #     scale = pow(2.0, power)
+        #     context = SEALContext.Create(parms)
+        #
+        #     # 生成秘钥
+        #     keygen = KeyGenerator(context)
+        #     public_key = keygen.public_key()
+        #     secret_key = keygen.secret_key()
+        #
+        #     # 初始化加密器，加密运算器，解密器
+        #     encryptor = Encryptor(context, public_key)
+        #     evaluator = Evaluator(context)
+        #     decryptor = Decryptor(context, secret_key)
+        #
+        #     # 初始化编码器
+        #     encoder = CKKSEncoder(context)
+        #     self.set_scale(scale)
+        #     self.set_public_key(public_key)
+        #     self.set_private_key(secret_key)
+        #     self.set_encoder(encoder)
+        #     self.set_encryptor(encryptor)
+        #     self.set_decryptor(decryptor)
+        #     self.set_evaluator(evaluator)
+
+    def get_label_dict(self, g):
+        """
+       获取标签权重字典
        :param G:
        :return: label_dict
        """
-        label_dict = []
-        for node, data in G.nodes(True):
-            dict_list = []
-            for neighbor in G.neighbors(node):  # 对顶点的所有邻居标签分组求和
-                sub_dict_list = G.nodes[neighbor]['label']
-                for item in sub_dict_list:
-                    dict_list.append(item)  # 所有邻居的label
-            dict_list_df = pd.DataFrame(dict_list)
-            dict_list_df = dict_list_df.groupby('community').sum()
-            dict_list_df.reset_index(inplace=True)  # 分组求和
-            dict_list_df = pd.DataFrame(dict_list_df.values.T, index=dict_list_df.columns, columns=dict_list_df.index)
-            dict_list = dict_list_df.to_dict()
-            neighbor_label_dict_list = []
-            for i in dict_list:  # 转成列表
-                neighbor_label_dict_list.append(dict_list[i])
-            new_array = [0.0 for x in range(self.num)]  # 维度为原图顶点数的单个向量，初始为0
-            for item_dict in neighbor_label_dict_list:
-                item_community = item_dict['community']
-                item_weight = item_dict['weight']
-                new_array[int(item_community)] = item_weight  # 更新顶点对应标签及其权重
-            sub_dict = {'node': node, 'label_weight': new_array}
-            label_dict.append(sub_dict)
-        return label_dict
+        node_label_dict = dict() # 顶点及其标签权重向量 eg:{1:[0.5,0.2],2:[0.1,0.0]}
+        for node, data in g.nodes(True):  # eg:G.nodes[node]['label']:{1:0.5,2:0.2}
+            union_dict = dict()  # 存储当前顶点所有邻居的标签及其权重
+            for neighbor in g.neighbors(node):
+                label_dict = g.nodes[neighbor]['label']
+                union_dict = dict(Counter(union_dict) + Counter(label_dict))  # 字典合并,相同label的权重相加
+            label_weight_vector = [0.0 for x in range(self.num)]  # 维度为原图顶点数的单个向量，初始为0.0
+            for key, value in union_dict.items():
+                label_weight_vector[key] = value  # 更新顶点对应标签及其权重
+            node_label_dict[node] = label_weight_vector
+        return node_label_dict
 
     @staticmethod
-    def get_intersect_dict(label_dict, intersect_ids):
+    def get_intersect_dict(node_label_dict, intersect_nodes):
         """
-        获取相交顶点的标签数字典
-        :param label_dict:
-        :param intersect_ids:
-        :return: intersect_dict
+        获取交集点的标签权重字典
+        :param node_label_dict:
+        :param intersect_nodes:
+        :return: 交集点的标签权重字典
         """
-        intersect_dict = []
-        for node in intersect_ids:
-            # print(node)
-            for item in label_dict:
-                item_node = int(item['node'])
-                if int(node) == item_node:
-                    intersect_dict.append(item)
+        intersect_dict = dict()
+        for intersect_node in intersect_nodes:
+            for key, value in node_label_dict.items():
+                if intersect_node == key:
+                    intersect_dict[key] = value
         return intersect_dict
 
-    def send_intersect_dict(self, intersect_dict):
+    def send_intersect_dict(self,  intersect_dict):
         """
-        交集顶点和标签数加密并发送给coordinator
+        交集顶点的标签权重向量加密并发送给coordinator
         :param self:
+        :param encrypted_scheme: 加密方案
         :param intersect_dict:
-        :return: intersect_dict
+        :return: 加密的交集顶点标签权重向量
+
         """
         encrypt_time = 0  # 单次迭代加密时间
-        intersect_dict = copy.deepcopy(intersect_dict)
-        for item in intersect_dict[:]:
-            item_label_weight = item['label_weight']
+        encrypted_intersect_dict = dict()
+        for key, value in intersect_dict.items():
             begin_time = time.time()
-            item_label_weight = [self.public_key.encrypt(x) for x in item_label_weight]
+            encrypted_value = self.encrypt(value)  # 加密权重向量
             end_time = time.time()
+            encrypted_intersect_dict[key] = encrypted_value
             encrypt_time += (end_time - begin_time)
-            item['label_weight'] = item_label_weight
         print("host send message to coordinator ...")
-        return intersect_dict, encrypt_time
+        return encrypted_intersect_dict, encrypt_time
 
-    def update_intersect_nodes(self, G, intersect_dict, v):
+    def label_propagate(self, g, encrypted_intersect_dict, node_label_dict, intersect_nodes, v):
         """
-        更新交集顶点标签
+        更新顶点标签及其权重
         :param self:
-        :param G:
-        :param intersect_dict:
+        :param encrypted_scheme: 加密方案
+        :param g: 子图
+        :param encrypted_intersect_dict: 加密状态的交集顶点标签字典
+        :param node_label_dict: 顶点标签字典
+        :param intersect_nodes: 交集顶点雷暴
         :param v:
+        :return: decrypt_time
+
         """
-        begin_time = time.time()
-        intersect_dict = copy.deepcopy(intersect_dict)
+        # 更新交集顶点标签及其权重
         decrypt_time = 0  # 单次迭代解密时间
-        intersect_up_num = 0  # 更新标签数量
-        # 解密交集顶点标签权重
-        for item in intersect_dict:
-            item_node = item['node']
-            item_label_weight = item['label_weight']
-            dec_begin_time = time.time()
-            item_label_weight = [self.private_key.decrypt(x) for x in item_label_weight]
-            dec_end_time = time.time()
+        for key, value in encrypted_intersect_dict.items():
+            dec_begin_time = time.time()  # 解密开始时间
+            label_weight_vector = self.decrypt(value)  # 解密向量
+            dec_end_time = time.time()  # 解密结束时间
             decrypt_time += (dec_end_time - dec_begin_time)
-            item_label_weight = self.normalize(item_label_weight)  # 对标签权权重向量做归一化处理
-            max_weight = max(item_label_weight)  # 找到最大权重值
-            if max_weight < 1 / float(v):  # 如果最大标签权重小于1/v,则从值为max_weight的索引中随机选取一个标签置1，其余全部置0,
-                idx_list = []  # 值为max_weight的索引下标（即为标签）
-                for i in range(len(item_label_weight)):
-                    if item_label_weight[i] == max_weight:
-                        idx_list.append(i)
-                choice_index = random.choice(idx_list)  # 值为max_weight的索引下标（即为标签）中随机选取一个，数量置为1,其余置0
-                for i in range(len(item_label_weight)):
-                    if i == choice_index:
-                        item_label_weight[i] = 1.0
-                    else:
-                        item_label_weight[i] = 0.0
-            else:  # 如果最大标签权重大于 1/v,则将小于1/v的标签权重置0, 其余归一化处理
-                for i in range(len(item_label_weight)):
-                    if item_label_weight[i] < 1 / float(v):
-                        item_label_weight[i] = 0.0
-                item_label_weight = self.normalize(item_label_weight)  # 归一化处理
-            item['label_weight'] = item_label_weight
-            dict_list = []
-            for i in range(len(item_label_weight)):
-                if item_label_weight[i] != 0.0:
-                    sub_dict = {'community': i, 'weight': item_label_weight[i]}
-                    dict_list.append(sub_dict)
-            G.nodes[item_node]["label"] = dict_list  # 更新G的顶点的标签以及权重
-            intersect_up_num += 1
-        end_time = time.time()
-        intersect_up_time = (end_time - begin_time - decrypt_time)  # 单次迭代标签更新时间
-        return decrypt_time, intersect_up_time, intersect_up_num
+            label_weight_vector = self.update_label_weight(label_weight_vector, v)  # 更新标签权重向量
+            # 更新子图顶点标签及其权重
+            label_dict = dict()
+            for i in range(len(label_weight_vector)):
+                if label_weight_vector[i] != 0.0:
+                    label_dict[i] = label_weight_vector[i]
+            g.nodes[key]["label"] = label_dict  # 更新g的顶点的标签以及权重
 
-    def update_remain_nodes(self, G, label_dict, intersect_ids, v):
+        # 更新非交集顶点标签及其权重
+        for key, value in node_label_dict.items():
+            if key not in intersect_nodes:
+                label_weight_vector = self.update_label_weight(value, v)  # 更新标签权重向量
+                # 更新子图顶点标签及其权重
+                label_dict = dict()
+                for i in range(len(label_weight_vector)):
+                    if label_weight_vector[i] != 0.0:
+                        label_dict[i] = label_weight_vector[i]
+                g.nodes[key]["label"] = label_dict  # 更新g的顶点的标签以及权重
+        return decrypt_time
+
+    def update_label_weight(self, item_label_weight, v):
         """
-        更新非交集顶点标签
-        :param self:
-        :param G:
-         :param label_dict:
-        :param intersect_ids:
+        根据corpa规则处理标签权重向量
+        :param item_label_weight: 标签权重向量
         :param v:
+        :return: 更新的标签权重向量
         """
-        remain_up_num = 0
-        begin_time = time.time()
-        for item in label_dict:
-            item_node = item['node']
-            item_label_weight = item['label_weight']
-            if int(item_node) not in intersect_ids:
-                item_label_weight = self.normalize(item_label_weight)  # 对标签权权重向量做归一化处理
-                max_weight = max(item_label_weight)  # 找到最大权重值
-                if max_weight < 1 / float(v):  # 如果最大标签权重小于1/v,则从值为max_weight的索引中随机选取一个标签置1，其余全部置0,
-                    idx_list = []  # 值为max_weight的索引下标（即为标签）
-                    for i in range(len(item_label_weight)):
-                        if item_label_weight[i] == max_weight:
-                            idx_list.append(i)
-                    choice_index = random.choice(idx_list)  # 值为max_weight的索引下标（即为标签）中随机选取一个，数量置为1,其余置0
-                    for i in range(len(item_label_weight)):
-                        if i == choice_index:
-                            item_label_weight[i] = 1.0
-                        else:
-                            item_label_weight[i] = 0.0
-                else:  # 如果最大标签权重大于 1/v,则将小于1/v的标签权重置0, 其余归一化处理
-                    for i in range(len(item_label_weight)):
-                        if item_label_weight[i] < 1 / float(v):
-                            item_label_weight[i] = 0.0
-                    item_label_weight = self.normalize(item_label_weight)  # 归一化处理
-                item['label_weight'] = item_label_weight
-                dict_list = []
-                for i in range(len(item_label_weight)):
-                    if item_label_weight[i] != 0.0:
-                        sub_dict = {'community': i, 'weight': item_label_weight[i]}
-                        dict_list.append(sub_dict)
-                G.nodes[item_node]["label"] = dict_list  # 更新G的顶点的标签以及权重
-                remain_up_num += 1
-        end_time = time.time()
-        remain_up_time = (end_time - begin_time)  # 其余节点更新时间
-        return remain_up_time, remain_up_num
+        item_label_weight = self.normalize(item_label_weight)  # 对标签权重向量做归一化处理
+        max_weight = max(item_label_weight)  # 找到最大权重值
+        if max_weight < 1 / float(v):  # 如果所有标签的最大权重值权重小于1/v,则从值为max_weight的索引(标签)中随机选取一个值置1，其余值置0
+            idx_list = []  # 值为max_weight的索引下标（即为标签）
+            for i in range(len(item_label_weight)):
+                if item_label_weight[i] == max_weight:
+                    idx_list.append(i)
+            choice_index = random.choice(idx_list)  # 值为max_weight的索引下标（即为标签）中随机选取一个，值置为1,其余置0
+            for i in range(len(item_label_weight)):
+                if i == choice_index:
+                    item_label_weight[i] = 1.0
+                else:
+                    item_label_weight[i] = 0.0
+        else:  # 如果最大标签权重大于 1/v,则将小于1/v的标签权重置0, 其余归一化处理
+            for i in range(len(item_label_weight)):
+                if item_label_weight[i] < 1 / float(v):
+                    item_label_weight[i] = 0.0
+            item_label_weight = self.normalize(item_label_weight)  # 归一化处理
+        return item_label_weight
 
     @staticmethod
     def normalize(item_label_weight):
         """
-        标签数量的归一化处理
+        向量的归一化处理
         :param item_label_weight:
         :return:
         """
-        sum_num = sum(item_label_weight)
+        sum_num = sum(item_label_weight)  # 权重求和
         item_label_weight = [x / sum_num for x in item_label_weight]
         return item_label_weight
+
+    def encrypt(self, item_label_weight):
+        """
+       无论是paillier还是ckks都封装成加密一个向量
+        """
+        input_vector = DoubleVector(item_label_weight)
+        # 编码
+        x_plain = Plaintext()
+        self.get_encoder().encode(input_vector, self.scale, x_plain)
+        # 加密
+        x_encrypted = Ciphertext()
+        self.get_encryptor().encrypt(x_plain, x_encrypted)
+        return x_encrypted
+        # if encrypted_scheme == 'paillier':  # paillier向量加密
+        #     item_label_weight = [self.get_public_key().encrypt(x) for x in item_label_weight]
+        #     return item_label_weight
+        # elif encrypted_scheme == 'ckks':  # ckks向量加密
+        #     input_vector = DoubleVector(item_label_weight)
+        #     # 编码
+        #     x_plain = Plaintext()
+        #     self.get_encoder().encode(input_vector, self.scale, x_plain)
+        #     # 加密
+        #     x_encrypted = Ciphertext()
+        #     self.get_encryptor().encrypt(x_plain, x_encrypted)
+        #     return x_encrypted
+
+    def decrypt(self, item_label_weight):
+        """
+       无论是paillier还是ckks都封装成解密一个向量
+        """
+        # 解密
+        plain_result = Plaintext()
+        self.get_decryptor().decrypt(item_label_weight, plain_result)
+        # 解码
+        decoded_vector = DoubleVector()
+        self.get_encoder().decode(plain_result, decoded_vector)
+        return decoded_vector
+        # if encrypted_scheme == 'paillier':  # paillier向量解密
+        #     item_label_weight = [self.get_private_key().decrypt(x) for x in item_label_weight]
+        #     return item_label_weight
+        # elif encrypted_scheme == 'ckks':  # ckks向量解密
+        #     # 解密
+        #     plain_result = Plaintext()
+        #     self.get_decryptor().decrypt(item_label_weight, plain_result)
+        #     # 解码
+        #     decoded_vector = DoubleVector()
+        #     self.get_encoder().decode(plain_result, decoded_vector)
+        #     return decoded_vector
